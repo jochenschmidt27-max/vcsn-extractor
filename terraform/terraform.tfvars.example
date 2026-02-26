@@ -1,0 +1,13 @@
+aws_region       = "eu-west-1"
+project_name     = "s3extractor"
+data_bucket_name = "my-vcsn-data-bucket"
+data_prefix      = ""           # or e.g. "timeseries/"
+filename_suffix  = "_csv.zip"
+date_column      = "Date"
+
+results_retention_days    = 2
+presigned_url_ttl_seconds = 86400
+
+# 1 vCPU / 2GB handles 1820 stations comfortably within ~15-20 min
+worker_cpu    = 1024
+worker_memory = 2048
