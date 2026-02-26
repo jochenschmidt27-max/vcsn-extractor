@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VCSN Timeseries Extractor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 48px 16px;
+      color: #1a1a2e;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      padding: 40px 44px;
+      width: 100%;
+      max-width: 580px;
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; color: #0f172a; }
+    .subtitle { font-size: 0.875rem; color: #64748b; margin-bottom: 32px; }
+
+    label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .field { margin-bottom: 20px; }
+
+    input[type="date"],
+    input[type="file"],
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.9375rem;
+      color: #111827;
+      background: #fff;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+
+    input[type="date"]:focus, input[type="text"]:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    }
+
+    input[type="file"] { padding: 8px; cursor: pointer; background: #f8fafc; }
+
+    .hint { font-size: 0.78rem; color: #94a3b8; margin-top: 4px; }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    .btn {
+      width: 100%;
+      padding: 13px;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 8px;
+    }
+    .btn:hover:not(:disabled) { background: #4f46e5; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .divider { border: none; border-top: 1px solid #e5e7eb; margin: 28px 0; }
+
+    /* Status panel */
+    .status-panel {
+      margin-top: 20px;
+      border-radius: 10px;
+      overflow: hidden;
+      display: none;
+      border: 1px solid #e5e7eb;
+    }
+    .status-panel.visible { display: block; }
+
+    .status-header {
+      padding: 14px 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status-header.pending  { background: #eff6ff; color: #1d4ed8; border-bottom: 1px solid #bfdbfe; }
+    .status-header.running  { background: #fefce8; color: #92400e; border-bottom: 1px solid #fde68a; }
+    .status-header.complete { background: #f0fdf4; color: #15803d; border-bottom: 1px solid #bbf7d0; }
+    .status-header.failed   { background: #fef2f2; color: #b91c1c; border-bottom: 1px solid #fecaca; }
+
+    .status-body { padding: 16px; }
+
+    /* Progress bar */
+    .progress-wrap {
+      background: #f1f5f9;
+      border-radius: 99px;
+      height: 10px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #6366f1, #8b5cf6);
+      border-radius: 99px;
+      transition: width 0.5s ease;
+      width: 0%;
+    }
+    .progress-bar.indeterminate {
+      width: 40%;
+      animation: slide 1.4s ease-in-out infinite;
+    }
+    @keyframes slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: #6b7280;
+    }
+    .stat-grid span { color: #111827; font-weight: 600; }
+
+    .download-btn {
+      display: block;
+      margin-top: 14px;
+      padding: 12px 24px;
+      background: #16a34a;
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-align: center;
+      transition: background 0.15s;
+    }
+    .download-btn:hover { background: #15803d; }
+
+    .spinner {
+      display: inline-block;
+      width: 15px; height: 15px;
+      border: 2.5px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      opacity: 0.6;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .advanced-toggle {
+      background: none; border: none; padding: 0;
+      font-size: 0.8125rem; color: #6366f1; cursor: pointer;
+      font-weight: 500; width: auto; margin-top: 0;
+    }
+    .advanced-toggle:hover { color: #4f46e5; }
+    .advanced { display: none; margin-top: 16px; }
+    .advanced.open { display: block; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>📦 VCSN Timeseries Extractor</h1>
+  <p class="subtitle">Upload a station list, choose a date range — results download automatically when ready.</p>
+
+  <div class="field">
+    <label>Station IDs CSV</label>
+    <input type="file" id="idsFile" accept=".csv,.txt" />
+    <p class="hint">First column used as station ID (e.g. AGENT_NO). Header row skipped automatically.</p>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label>Start Date</label>
+      <input type="date" id="startDate" />
+    </div>
+    <div class="field">
+      <label>End Date</label>
+      <input type="date" id="endDate" />
+    </div>
+  </div>
+
+  <button class="advanced-toggle" onclick="document.getElementById('advanced').classList.toggle('open')">
+    ⚙ Advanced options
+  </button>
+  <div class="advanced" id="advanced">
+    <div class="field" style="margin-top:14px">
+      <label>Date Column Name</label>
+      <input type="text" id="dateColumn" value="Date" />
+      <p class="hint">Name of the date column in the source CSV files</p>
+    </div>
+  </div>
+
+  <hr class="divider" />
+  <button class="btn" id="runBtn" onclick="runExtraction()">Extract Data</button>
+
+  <!-- Status panel -->
+  <div class="status-panel" id="statusPanel">
+    <div class="status-header" id="statusHeader">
+      <span class="spinner" id="statusSpinner"></span>
+      <span id="statusTitle">Submitting…</span>
+    </div>
+    <div class="status-body">
+      <div class="progress-wrap"><div class="progress-bar indeterminate" id="progressBar"></div></div>
+      <div class="stat-grid" id="statGrid"></div>
+      <div id="downloadArea"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Injected by deploy.sh — or hard-code here for testing
+  const API_BASE = window.API_BASE || "%%API_BASE%%";
+
+  let pollInterval = null;
+
+  // ---------------------------------------------------------------------------
+  // Submit
+  // ---------------------------------------------------------------------------
+  async function runExtraction() {
+    const fileInput  = document.getElementById("idsFile");
+    const startDate  = document.getElementById("startDate").value;
+    const endDate    = document.getElementById("endDate").value;
+    const dateColumn = document.getElementById("dateColumn").value.trim() || "Date";
+
+    if (!fileInput.files.length) return alert("Please select a station IDs CSV file.");
+    if (!startDate || !endDate)  return alert("Please select both a start and end date.");
+    if (startDate > endDate)     return alert("Start date must be on or before end date.");
+    if (!API_BASE || API_BASE.includes("%%")) return alert("API endpoint not configured.");
+
+    setButtonLoading(true);
+    showPanel("pending", "Submitting job…");
+
+    const csvText = await fileInput.files[0].text();
+    const csvB64  = btoa(unescape(encodeURIComponent(csvText)));
+
+    try {
+      const resp = await fetch(`${API_BASE}/jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids_csv: csvB64, start_date: startDate, end_date: endDate, date_column: dateColumn }),
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        showPanel("failed", `Submission failed: ${data.error || resp.statusText}`);
+        setButtonLoading(false);
+        return;
+      }
+
+      showPanel("pending", "Job queued — waiting for worker to start…");
+      setStats({ "Job ID": data.job_id.slice(0,8)+"…", "Stations": data.total_ids, "Start": data.start_date, "End": data.end_date });
+      startPolling(data.job_id);
+
+    } catch (err) {
+      showPanel("failed", `Network error: ${err.message}`);
+      setButtonLoading(false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Polling
+  // ---------------------------------------------------------------------------
+  function startPolling(jobId) {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(() => pollJob(jobId), 5000);
+    pollJob(jobId); // immediate first check
+  }
+
+  async function pollJob(jobId) {
+    try {
+      const resp = await fetch(`${API_BASE}/jobs/${jobId}`);
+      const job  = await resp.json();
+
+      if (!resp.ok) {
+        stopPolling();
+        showPanel("failed", `Error checking status: ${job.error || resp.statusText}`);
+        setButtonLoading(false);
+        return;
+      }
+
+      const status = job.status;
+
+      if (status === "pending") {
+        showPanel("pending", "Job queued — Fargate worker starting up…");
+        setProgressIndeterminate();
+
+      } else if (status === "running") {
+        const processed = job.processed_ids || 0;
+        const total     = job.total_ids || 1;
+        const pct       = Math.round((processed / total) * 100);
+        showPanel("running", `Processing stations… ${processed} / ${total}`);
+        setProgress(pct);
+        setStats({
+          "Processed": `${processed} / ${total}`,
+          "Written":   job.files_written ?? "—",
+          "Start":     job.start_date,
+          "End":       job.end_date,
+        });
+
+      } else if (status === "complete") {
+        stopPolling();
+        setProgress(100);
+        showPanel("complete", "✅ Extraction complete!");
+        setStats({
+          "Stations requested": job.total_ids,
+          "Files matched":      job.ids_matched,
+          "CSVs in output":     job.files_written,
+          "Total rows":         (job.total_rows || 0).toLocaleString(),
+        });
+        document.getElementById("downloadArea").innerHTML = `
+          <a class="download-btn" href="${job.download_url}" download>⬇ Download ZIP</a>
+          <p style="font-size:0.78rem;color:#6b7280;margin-top:8px;">
+            Link expires in 24 hours.
+          </p>`;
+        setButtonLoading(false);
+
+      } else if (status === "failed") {
+        stopPolling();
+        showPanel("failed", `❌ Job failed: ${job.error || "Unknown error"}`);
+        setProgressIndeterminate(false);
+        setButtonLoading(false);
+      }
+
+    } catch (err) {
+      // Network blip — keep polling, don't stop
+      console.warn("Poll error (will retry):", err.message);
+    }
+  }
+
+  function stopPolling() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI helpers
+  // ---------------------------------------------------------------------------
+  function showPanel(type, title) {
+    document.getElementById("statusPanel").classList.add("visible");
+    const header = document.getElementById("statusHeader");
+    header.className = `status-header ${type}`;
+    document.getElementById("statusTitle").textContent = title;
+    document.getElementById("statusSpinner").style.display =
+      (type === "pending" || type === "running") ? "inline-block" : "none";
+  }
+
+  function setButtonLoading(loading) {
+    const btn = document.getElementById("runBtn");
+    btn.disabled  = loading;
+    btn.textContent = loading ? "Running…" : "Extract Data";
+  }
+
+  function setProgress(pct) {
+    const bar = document.getElementById("progressBar");
+    bar.classList.remove("indeterminate");
+    bar.style.width = pct + "%";
+  }
+
+  function setProgressIndeterminate(on = true) {
+    const bar = document.getElementById("progressBar");
+    if (on) { bar.classList.add("indeterminate"); bar.style.width = ""; }
+    else    { bar.classList.remove("indeterminate"); bar.style.width = "0%"; }
+  }
+
+  function setStats(obj) {
+    document.getElementById("statGrid").innerHTML =
+      Object.entries(obj).map(([k, v]) => `<div>${k}<br/><span>${v}</span></div>`).join("");
+  }
+</script>
+</body>
+</html>
